@@ -43,13 +43,13 @@ __global__ void rungeKutta4(double* input, double* constant, int steps, double s
     double* constants = &yValues[8 * 4];
 
         
-    auto PDE = [] __device__(double* input, double* constant, int DE) {
-        return input[DE];
+    auto PartialDifferentialEquation = [] __device__(double* input, double* constant, int DifferentialEquation) {
+        return input[DifferentialEquation];
         double IFR = 0.01;
         if (constant[6] * input[4] * 0.0125 > constant[7]) { 
             IFR = 0.02 - 0.01 * constant[7] / (constant[6] * input[4] * 0.0125);
         }
-        switch (DE) {
+        switch (DifferentialEquation) {
         case 0:
             //  dSuseptible/dt
             return (-beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested));
@@ -82,26 +82,29 @@ __global__ void rungeKutta4(double* input, double* constant, int steps, double s
     __syncthreads();
 
     double k1, k2, k3, k4;
-    
+    if (threadIdx.x != 0) { return; }
     for (int i = 1; i < steps; ++i) {
-        k1 = stepSize * PDE(Y0, constants, threadIdx.x);
-        Y1[threadIdx.x] = Y0[threadIdx.x] + k1 / 2;
-        __syncthreads();
+        for (int j = 0; j < 8; ++j) {
 
-        k2 = stepSize * PDE(Y1, constants, threadIdx.x);
-        Y2[threadIdx.x] = Y0[threadIdx.x] + k2 / 2;
-        __syncthreads();
-        
-        k3 = stepSize * PDE(Y2, constants, threadIdx.x);
-        Y3[threadIdx.x] = Y0[threadIdx.x] + k3;
-        __syncthreads();
-        
-        k4 = stepSize * PDE(Y3, constants, threadIdx.x);
-        __syncthreads();
-        
-        simulation[i][threadIdx.x] = simulation[i - 1][threadIdx.x] + (k1 + 2 * k2 + 2 * k3 + k4) / 6;
-        Y0[threadIdx.x] = simulation[i][threadIdx.x];
-        __syncthreads();
+            k1 = stepSize * PartialDifferentialEquation(Y0, constants, j);
+            Y1[threadIdx.x] = Y0[threadIdx.x] + k1 / 2;
+            __syncthreads();
+
+            k2 = stepSize * PartialDifferentialEquation(Y1, constants, j);
+            Y2[threadIdx.x] = Y0[threadIdx.x] + k2 / 2;
+            __syncthreads();
+
+            k3 = stepSize * PartialDifferentialEquation(Y2, constants, j);
+            Y3[threadIdx.x] = Y0[threadIdx.x] + k3;
+            __syncthreads();
+
+            k4 = stepSize * PartialDifferentialEquation(Y3, constants, j);
+            __syncthreads();
+
+            simulation[i][j] = simulation[i - 1][j] + (k1 + 2 * k2 + 2 * k3 + k4) / 6;
+            Y0[j] = simulation[i][j];
+            __syncthreads();
+        }
     }
 }
 
