@@ -77,36 +77,6 @@ __global__ void rungeKutta4(double* input, double* constant, int steps, double s
         }
         return 0.0;
     };
-
-    /*
-    double IFR = 0.01;
-    if (d_constant[6] * d_input[4] * 0.0125 > d_constant[7]) {
-        IFR = 0.02 - 0.01 * d_constant[7] / (d_constant[6] * d_input[4] * 0.0125);
-    }
-    auto DE0 = [] __device__(double* input, double* constant) {
-        return (-beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested));
-    };
-    auto DE1 = [] __device__(double* input, double* constant) {
-        return (beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested) - alpha * exposed);
-    };
-    auto DE2 = [] __device__(double* input, double* constant) {
-        return (alpha * exposed - delta * presymptomatic);
-    };
-    auto DE3 = [] __device__(double* input, double* constant) {
-        return (delta * presymptomatic - (gamma + testingRate) * infectiousUntested);
-    };
-    auto DE4 = [] __device__(double* input, double* constant) {
-        return (testingRate * infectiousUntested - gamma * infectiousTested);
-    };
-    auto DE5 = [] __device__(double* input, double* constant) {
-        return (gamma * infectiousUntested * (1 - IFR));
-    };
-    auto DE6 = [] __device__(double* input, double* constant) {
-        return (gamma * infectiousTested * (1 - IFR));
-    };
-    auto DE7 = [] __device__(double* input, double* constant) {
-        return (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
-    };*/
                             
     //this is an intellisense bug, the compiler handles it just fine.
     __syncthreads();
