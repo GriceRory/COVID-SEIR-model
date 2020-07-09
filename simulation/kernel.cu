@@ -30,7 +30,11 @@
 
 
 __global__ void rungeKutta4(double* inputs, double* constants, int steps, double stepSize, double** simulation) {
-    //inputs, y0+h*k1/2, y0+h*k2/2, y0+h*k3, constants
+    //&inputs for each layer = &yValues[0]
+    //&y0+h*k1/2 = &yValues[8]
+    //&y0+h*k2/2 = &yValues[16]
+    //&y0+h*k3 = &yValues[24]
+    //&constants = &yValues[32]
     __shared__ double yValues[8 * 5];
     yValues[threadIdx.x] = inputs[threadIdx.x];
     yValues[threadIdx.x + 8 * 4] = constants[threadIdx.x];
@@ -40,6 +44,9 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
     double* input = yValues;
 
     /*
+    //this lambda function would be nice to use because it cleans things up, but it doesnt want to work for some reason.
+    //once I figure out that reason I might figure out a way to make it work with the lambda function and see if I can put it back in
+    
     auto PartialDifferentialEquation = [] __device__(double* input, double* constant, int DifferentialEquation) {
         double IFR = 0.01;
         if (constant[6] * input[4] * 0.0125 > constant[7]) { 
@@ -82,7 +89,7 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
     for (int i = 1; i < steps; ++i) {
         for (int j = 0; j < 3; ++j) {
 
-            input = &yValues[8 * (1 + j)];
+            input = &yValues[8 * j];
             double IFR = 0.01;
             if (constants[6] * inputs[4] * 0.0125 > constants[7]) {
                 IFR = 0.02 - 0.01 * constants[7] / (constants[6] * inputs[4] * 0.0125);
@@ -91,33 +98,42 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
             case 0:
                 //  dSuseptible/dt
                 k[j] = stepSize * (-beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested));
+                break;
             case 1:
                 //  dExposed/dt
                 k[j] = stepSize * (beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested) - alpha * exposed);
+                break;
             case 2:
                 //  dPresymptomatic/dt
                 k[j] = stepSize * (alpha * exposed - delta * presymptomatic);
+                break;
             case 3:
                 //  dInfectedUntested/dt
                 k[j] = stepSize * (delta * presymptomatic - (gamma + testingRate) * infectiousUntested);
+                break;
             case 4:
                 //  dInfectedTested/dt
                 k[j] = stepSize * (testingRate * infectiousUntested - gamma * infectiousTested);
+                break;
             case 5:
                 //  dRecoveredUntested/dt
                 k[j] = stepSize * (gamma * infectiousUntested * (1 - IFR));
+                break;
             case 6:
                 //  dRecoveredTested/dt
                 k[j] = stepSize * (gamma * infectiousTested * (1 - IFR));
+                break;
             case 7:
                 //  Dead
                 k[j] = stepSize * (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
+                break;
             }
 
             if (j < 2) { k[j] /= 2; }
             yValues[8*(1+j) + threadIdx.x] = yValues[8*j + threadIdx.x] + k[j] / 2;
             __syncthreads();
         }
+
         simulation[i][threadIdx.x] = simulation[i - 1][threadIdx.x] + (k[0] + 2 * k[1] + 2 * k[2] + k[3]) / 6;
         yValues[threadIdx.x] = simulation[i][threadIdx.x];
         __syncthreads();
@@ -144,7 +160,7 @@ void initializeConstants(double *constant, double *input) {
 
     population = 5000000;
     susceptible = 10/population;
-    exposed = 0;
+    exposed = 20/population;
     presymptomatic = 0;
     ICUbeds = 500/population;
     infectiousUntested = 0;
