@@ -29,22 +29,18 @@
 
 
 
-__global__ void rungeKutta4(double* input, double* constant, int steps, double stepSize, double** simulation) {
+__global__ void rungeKutta4(double* inputs, double* constants, int steps, double stepSize, double** simulation) {
     //inputs, y0+h*k1/2, y0+h*k2/2, y0+h*k3, constants
     __shared__ double yValues[8 * 5];
-    yValues[threadIdx.x] = input[threadIdx.x];
-    yValues[threadIdx.x + 8 * 3] = constant[threadIdx.x];
-    simulation[0][threadIdx.x] = input[threadIdx.x];
+    yValues[threadIdx.x] = inputs[threadIdx.x];
+    yValues[threadIdx.x + 8 * 4] = constants[threadIdx.x];
+    simulation[0][threadIdx.x] = inputs[threadIdx.x];
 
-    double* Y0 = yValues;
-    double* Y1 = &yValues[8];
-    double* Y2 = &yValues[8 * 2];
-    double* Y3 = &yValues[8 * 3];
-    double* constants = &yValues[8 * 4];
+    double* constant = &yValues[8 * 4];
+    double* input = yValues;
 
-        
+    /*
     auto PartialDifferentialEquation = [] __device__(double* input, double* constant, int DifferentialEquation) {
-        return input[DifferentialEquation];
         double IFR = 0.01;
         if (constant[6] * input[4] * 0.0125 > constant[7]) { 
             IFR = 0.02 - 0.01 * constant[7] / (constant[6] * input[4] * 0.0125);
@@ -76,35 +72,55 @@ __global__ void rungeKutta4(double* input, double* constant, int steps, double s
             return (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
         }
         return 0.0;
-    };
+    };*/
                             
     //this is an intellisense bug, the compiler handles it just fine.
     __syncthreads();
 
-    double k1, k2, k3, k4;
+    double k[4];
     if (threadIdx.x != 0) { return; }
     for (int i = 1; i < steps; ++i) {
-        for (int j = 0; j < 8; ++j) {
+        for (int j = 0; j < 3; ++j) {
 
-            k1 = stepSize * PartialDifferentialEquation(Y0, constants, j);
-            Y1[threadIdx.x] = Y0[threadIdx.x] + k1 / 2;
-            __syncthreads();
+            input = &yValues[8 * (1 + j)];
+            double IFR = 0.01;
+            if (constants[6] * inputs[4] * 0.0125 > constants[7]) {
+                IFR = 0.02 - 0.01 * constants[7] / (constants[6] * inputs[4] * 0.0125);
+            }
+            switch (threadIdx.x) {
+            case 0:
+                //  dSuseptible/dt
+                k[j] = stepSize * (-beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested));
+            case 1:
+                //  dExposed/dt
+                k[j] = stepSize * (beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested) - alpha * exposed);
+            case 2:
+                //  dPresymptomatic/dt
+                k[j] = stepSize * (alpha * exposed - delta * presymptomatic);
+            case 3:
+                //  dInfectedUntested/dt
+                k[j] = stepSize * (delta * presymptomatic - (gamma + testingRate) * infectiousUntested);
+            case 4:
+                //  dInfectedTested/dt
+                k[j] = stepSize * (testingRate * infectiousUntested - gamma * infectiousTested);
+            case 5:
+                //  dRecoveredUntested/dt
+                k[j] = stepSize * (gamma * infectiousUntested * (1 - IFR));
+            case 6:
+                //  dRecoveredTested/dt
+                k[j] = stepSize * (gamma * infectiousTested * (1 - IFR));
+            case 7:
+                //  Dead
+                k[j] = stepSize * (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
+            }
 
-            k2 = stepSize * PartialDifferentialEquation(Y1, constants, j);
-            Y2[threadIdx.x] = Y0[threadIdx.x] + k2 / 2;
-            __syncthreads();
-
-            k3 = stepSize * PartialDifferentialEquation(Y2, constants, j);
-            Y3[threadIdx.x] = Y0[threadIdx.x] + k3;
-            __syncthreads();
-
-            k4 = stepSize * PartialDifferentialEquation(Y3, constants, j);
-            __syncthreads();
-
-            simulation[i][j] = simulation[i - 1][j] + (k1 + 2 * k2 + 2 * k3 + k4) / 6;
-            Y0[j] = simulation[i][j];
+            if (j < 2) { k[j] /= 2; }
+            yValues[8*(1+j) + threadIdx.x] = yValues[8*j + threadIdx.x] + k[j] / 2;
             __syncthreads();
         }
+        simulation[i][threadIdx.x] = simulation[i - 1][threadIdx.x] + (k[0] + 2 * k[1] + 2 * k[2] + k[3]) / 6;
+        yValues[threadIdx.x] = simulation[i][threadIdx.x];
+        __syncthreads();
     }
 }
 
@@ -112,9 +128,9 @@ void printSimulationLayer(double* layer) {
     printf("susceptible, exposed, presymptomatic, infectiousUntested, infectiousTested, recoveredUntested, recoveredTested, Deaths\n");
     //printf("beta, epsilon, alpha, delta, gamma, testingRate, population, ICUbeds\n");
     for (int i = 0; i < 7; ++i) {
-        printf("%f, ", layer[i]);
+        printf("%f, ", layer[i] * 5000000);
     }
-    printf("%f\n\n", layer[7]);
+    printf("%f\n\n", layer[7] * 5000000);
 }
 
 void initializeConstants(double *constant, double *input) {
@@ -127,7 +143,7 @@ void initializeConstants(double *constant, double *input) {
     testingRate = 0.1;
 
     population = 5000000;
-    susceptible = 10;
+    susceptible = 10/population;
     exposed = 0;
     presymptomatic = 0;
     ICUbeds = 500/population;
@@ -180,7 +196,7 @@ int main() {
     cudaMemcpy(d_constant, h_constant, 8 * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, h_input, 8 * sizeof(double), cudaMemcpyHostToDevice);
 
-    int simulationSteps = 2 * 365;
+    int simulationSteps = 2 * 10;
     double simulationStepSize = 0.5;
 
     double** h_simulation = simulate(d_input, d_constant, simulationSteps, simulationStepSize);
