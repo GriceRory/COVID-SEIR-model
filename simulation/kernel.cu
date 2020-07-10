@@ -8,6 +8,7 @@
 #include <stdio.h>
 
 
+#define PICU 0.0125
 
 #define beta constant[0]
 #define epsilon constant[1]
@@ -39,6 +40,7 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
     yValues[threadIdx.x] = inputs[threadIdx.x];
     yValues[threadIdx.x + 8 * 4] = constants[threadIdx.x];
     simulation[0][threadIdx.x] = inputs[threadIdx.x];
+    double k[4];
 
     double* constant = &yValues[8 * 4];
     double* input = yValues;
@@ -84,49 +86,47 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
     //this is an intellisense bug, the compiler handles it just fine.
     __syncthreads();
 
-    double k[4];
+    
     if (threadIdx.x != 0) { return; }
     for (int i = 1; i < steps; ++i) {
         for (int j = 0; j < 3; ++j) {
 
             input = &yValues[8 * j];
             double IFR = 0.01;
-            if (constants[6] * inputs[4] * 0.0125 > constants[7]) {
-                IFR = 0.02 - 0.01 * constants[7] / (constants[6] * inputs[4] * 0.0125);
+            if (population * (infectiousTested + infectiousUntested) * PICU > ICUbeds) {
+                IFR = 0.02 - 0.01 * ICUbeds / (population * (infectiousTested + infectiousUntested) * PICU);
             }
-            switch (threadIdx.x) {
-            case 0:
+            if (threadIdx.x == 0) {
                 //  dSuseptible/dt
                 k[j] = stepSize * (-beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested));
-                break;
-            case 1:
+            }
+            if (threadIdx.x == 1) {
                 //  dExposed/dt
                 k[j] = stepSize * (beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested) - alpha * exposed);
-                break;
-            case 2:
+            }
+            if (threadIdx.x == 2) {
                 //  dPresymptomatic/dt
                 k[j] = stepSize * (alpha * exposed - delta * presymptomatic);
-                break;
-            case 3:
+            }
+            if (threadIdx.x == 3) {
                 //  dInfectedUntested/dt
                 k[j] = stepSize * (delta * presymptomatic - (gamma + testingRate) * infectiousUntested);
-                break;
-            case 4:
+            }
+            if (threadIdx.x == 3) {
                 //  dInfectedTested/dt
                 k[j] = stepSize * (testingRate * infectiousUntested - gamma * infectiousTested);
-                break;
-            case 5:
+            }
+            if (threadIdx.x == 5) {
                 //  dRecoveredUntested/dt
                 k[j] = stepSize * (gamma * infectiousUntested * (1 - IFR));
-                break;
-            case 6:
+            }
+            if (threadIdx.x == 6) {
                 //  dRecoveredTested/dt
                 k[j] = stepSize * (gamma * infectiousTested * (1 - IFR));
-                break;
-            case 7:
+            }
+            if (threadIdx.x == 7) {
                 //  Dead
                 k[j] = stepSize * (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
-                break;
             }
 
             if (j < 2) { k[j] /= 2; }
@@ -134,7 +134,7 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
             __syncthreads();
         }
 
-        simulation[i][threadIdx.x] = simulation[i - 1][threadIdx.x] + (k[0] + 2 * k[1] + 2 * k[2] + k[3]) / 6;
+        simulation[i][threadIdx.x] = 99.9;// simulation[i - 1][threadIdx.x] + (k[0] + 2 * k[1] + 2 * k[2] + k[3]) / 6;
         yValues[threadIdx.x] = simulation[i][threadIdx.x];
         __syncthreads();
     }
