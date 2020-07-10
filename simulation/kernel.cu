@@ -31,20 +31,19 @@
 
 
 __global__ void rungeKutta4(double* inputs, double* constants, int steps, double stepSize, double** simulation) {
-    //&inputs for each layer = &yValues[0]
-    //&y0+h*k1/2 = &yValues[8]
-    //&y0+h*k2/2 = &yValues[16]
-    //&y0+h*k3 = &yValues[24]
-    //&constants = &yValues[32]
+    //inputs for each layer = &yValues[0]
+    //y0+h*k1/2 = &yValues[8]
+    //y0+h*k2/2 = &yValues[16]
+    //y0+h*k3 = &yValues[24]
+    //constants = &yValues[32]
     __shared__ double yValues[8 * 5];
     yValues[threadIdx.x] = inputs[threadIdx.x];
-    yValues[threadIdx.x + 8 * 4] = constants[threadIdx.x];
+    double* constant = &yValues[8 * 4];
+    constant[threadIdx.x] = constants[threadIdx.x];
     simulation[0][threadIdx.x] = inputs[threadIdx.x];
     double k[4];
 
-    double* constant = &yValues[8 * 4];
-    double* input = yValues;
-
+    
     /*
     //this lambda function would be nice to use because it cleans things up, but it doesnt want to work for some reason.
     //once I figure out that reason I might figure out a way to make it work with the lambda function and see if I can put it back in
@@ -86,8 +85,9 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
     //this is an intellisense bug, the compiler handles it just fine.
     __syncthreads();
 
-    
-    if (threadIdx.x != 0) { return; }
+    double* input;
+
+    //if (threadIdx.x != 0) { return; }
     for (int i = 1; i < steps; ++i) {
         for (int j = 0; j < 3; ++j) {
 
@@ -124,17 +124,18 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
                 //  dRecoveredTested/dt
                 k[j] = stepSize * (gamma * infectiousTested * (1 - IFR));
             }
-            if (threadIdx.x == 7) {
-                //  Dead
-                k[j] = stepSize * (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
-            }
+            
 
             if (j < 2) { k[j] /= 2; }
             yValues[8*(1+j) + threadIdx.x] = yValues[8*j + threadIdx.x] + k[j] / 2;
             __syncthreads();
         }
 
-        simulation[i][threadIdx.x] = 99.9;// simulation[i - 1][threadIdx.x] + (k[0] + 2 * k[1] + 2 * k[2] + k[3]) / 6;
+        simulation[i][threadIdx.x] = simulation[i - 1][threadIdx.x] + (k[0] + 2 * k[1] + 2 * k[2] + k[3]) / 6;
+        if (threadIdx.x == 7) {
+            //  Dead
+            simulation[i][threadIdx.x] = (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
+        }
         yValues[threadIdx.x] = simulation[i][threadIdx.x];
         __syncthreads();
     }
@@ -159,8 +160,8 @@ void initializeConstants(double *constant, double *input) {
     testingRate = 0.1;
 
     population = 5000000;
-    susceptible = 10/population;
-    exposed = 20/population;
+    exposed = 200/population;
+susceptible = 1 - exposed;
     presymptomatic = 0;
     ICUbeds = 500/population;
     infectiousUntested = 0;
@@ -212,7 +213,7 @@ int main() {
     cudaMemcpy(d_constant, h_constant, 8 * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, h_input, 8 * sizeof(double), cudaMemcpyHostToDevice);
 
-    int simulationSteps = 2 * 10;
+    int simulationSteps = 2 * 365;
     double simulationStepSize = 0.5;
 
     double** h_simulation = simulate(d_input, d_constant, simulationSteps, simulationStepSize);
