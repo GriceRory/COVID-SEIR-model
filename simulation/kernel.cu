@@ -87,56 +87,57 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
 
     double* input;
 
-    //if (threadIdx.x != 0) { return; }
-    for (int i = 1; i < steps; ++i) {
-        for (int j = 0; j < 3; ++j) {
 
-            input = &yValues[8 * j];
+    for (int step = 1; step < steps; ++step) {
+        for (int kValue = 0; kValue < 3; ++kValue) {
+
+            input = &yValues[8 * kValue];
             double IFR = 0.01;
             if (population * (infectiousTested + infectiousUntested) * PICU > ICUbeds) {
                 IFR = 0.02 - 0.01 * ICUbeds / (population * (infectiousTested + infectiousUntested) * PICU);
             }
             if (threadIdx.x == 0) {
                 //  dSuseptible/dt
-                k[j] = stepSize * (-beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested));
+                k[kValue] = stepSize * (-beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested));
             }
             if (threadIdx.x == 1) {
                 //  dExposed/dt
-                k[j] = stepSize * (beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested) - alpha * exposed);
+                k[kValue] = stepSize * (beta * susceptible * (epsilon * presymptomatic + infectiousTested + infectiousUntested) - alpha * exposed);
             }
             if (threadIdx.x == 2) {
                 //  dPresymptomatic/dt
-                k[j] = stepSize * (alpha * exposed - delta * presymptomatic);
+                k[kValue] = stepSize * (alpha * exposed - delta * presymptomatic);
             }
             if (threadIdx.x == 3) {
                 //  dInfectedUntested/dt
-                k[j] = stepSize * (delta * presymptomatic - (gamma + testingRate) * infectiousUntested);
+                k[kValue] = stepSize* (delta * presymptomatic - (gamma + testingRate) * infectiousUntested);
             }
-            if (threadIdx.x == 3) {
+            if (threadIdx.x == 4) {
                 //  dInfectedTested/dt
-                k[j] = stepSize * (testingRate * infectiousUntested - gamma * infectiousTested);
+                k[kValue] = stepSize * (testingRate * infectiousUntested - gamma * infectiousTested);
             }
             if (threadIdx.x == 5) {
                 //  dRecoveredUntested/dt
-                k[j] = stepSize * (gamma * infectiousUntested * (1 - IFR));
+                k[kValue] = stepSize * (gamma * infectiousUntested * (1 - IFR));
             }
             if (threadIdx.x == 6) {
                 //  dRecoveredTested/dt
-                k[j] = stepSize * (gamma * infectiousTested * (1 - IFR));
+                k[kValue] = stepSize * (gamma * infectiousTested * (1 - IFR));
             }
             
 
-            if (j < 2) { k[j] /= 2; }
-            yValues[8*(1+j) + threadIdx.x] = yValues[8*j + threadIdx.x] + k[j] / 2;
+            if (kValue < 2) { k[kValue] /= 2; }
+            input = yValues;
+            yValues[8*(1+kValue) + threadIdx.x] = input[threadIdx.x] + k[kValue];
             __syncthreads();
         }
 
-        simulation[i][threadIdx.x] = simulation[i - 1][threadIdx.x] + (k[0] + 2 * k[1] + 2 * k[2] + k[3]) / 6;
+        simulation[step][threadIdx.x] = simulation[step - 1][threadIdx.x] + (k[0] + 2 * k[1] + 2 * k[2] + k[3]) / 6;
         if (threadIdx.x == 7) {
             //  Dead
-            simulation[i][threadIdx.x] = (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
+            simulation[step][threadIdx.x] = (1 - susceptible - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested);
         }
-        yValues[threadIdx.x] = simulation[i][threadIdx.x];
+        yValues[threadIdx.x] = simulation[step][threadIdx.x];
         __syncthreads();
     }
 }
@@ -160,8 +161,7 @@ void initializeConstants(double *constant, double *input) {
     testingRate = 0.1;
 
     population = 5000000;
-    exposed = 200/population;
-susceptible = 1 - exposed;
+    exposed = 10/population;
     presymptomatic = 0;
     ICUbeds = 500/population;
     infectiousUntested = 0;
@@ -169,6 +169,7 @@ susceptible = 1 - exposed;
     recoveredUntested = 0;
     recoveredTested = 0;
     deaths = 0;
+    susceptible = 1 - exposed - presymptomatic - infectiousTested - infectiousUntested - recoveredTested - recoveredUntested - deaths;
 }
 
 double** simulate(double* inputs, double* constants, int steps, double stepSize) {
@@ -213,7 +214,7 @@ int main() {
     cudaMemcpy(d_constant, h_constant, 8 * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, h_input, 8 * sizeof(double), cudaMemcpyHostToDevice);
 
-    int simulationSteps = 2 * 365;
+    int simulationSteps = 5 * 2 * 365;
     double simulationStepSize = 0.5;
 
     double** h_simulation = simulate(d_input, d_constant, simulationSteps, simulationStepSize);
