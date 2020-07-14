@@ -3,6 +3,7 @@
 #include "device_launch_parameters.h"
 #include <stdio.h>
 
+#include <math.h>
 #include "simulate.cu"
 
 
@@ -51,7 +52,7 @@ int main() {
     cudaMemcpy(d_constant, h_constant, 8 * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, h_input, 8 * sizeof(double), cudaMemcpyHostToDevice);
     
-    double simulationStepSize = 0.5;
+    double simulationStepSize = 1;
     int simulationSteps = 365/simulationStepSize;
     
     double** h_simulation = simulate(d_input, d_constant, simulationSteps, simulationStepSize);

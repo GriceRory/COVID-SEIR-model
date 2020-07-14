@@ -1,6 +1,7 @@
 
 #define BLOCK_SIZE 32*2
 
+
 typedef struct{
 	int degree;
 	double *coefficiants;
@@ -8,6 +9,7 @@ typedef struct{
 
 typedef struct {
 	double base;
+	double baseConstant;
 	double exponentConstant;
 	double exponentDisplacement;
 }exponential;
@@ -15,14 +17,17 @@ typedef struct {
 typedef struct {
 	polynomial* polynomials;
 	exponential* decays;
+	int length;
 }trendFunction;
 
 __device__ void reduce(double *reduction);
 double error(double* expected, double* actual);
 polynomial fitPolynomail(double* data, int degree);
 polynomial differentiate(polynomial p);
-trendFunction calculateTrend(double* data);
+trendFunction calculateTrend(double* data, int polynomialDegree, int polynomialRange, int dataLength);
 double trendAtTime(trendFunction trend, double time);
+double polynomialAtTime(polynomial p, double time);
+double exponentialAtTime(exponential e, double time);
 
 /*
 __device__ void reduce(double *reduction) {
@@ -60,13 +65,44 @@ polynomial differentiate(polynomial p) {
 	return pPrime;
 }
 
-trendFunction calculateTrend(double* data) {
+double polynomialAtTime(polynomial p, double time) {
+	double value = 0;
+	double t = 1;
+	for (int i = 0; i < p.degree; ++i) {
+		value += p.coefficiants[p.degree-i] * t;
+		t *= time;
+	}
+	return value;
+}
+double exponentialAtTime(exponential e, double time) {
+	double value = 0;
+
+	return e.baseConstant * pow(e.base, e.exponentConstant * (time - e.exponentDisplacement));
+}
+
+trendFunction calculateTrend(double* data, int polynomialDegree, int polynomialRange, int dataLength) {
 	trendFunction trend;
+	trend.length = dataLength - polynomialRange;
+	cudaMallocHost(&trend.decays, trend.length * sizeof(exponential));
+	cudaMallocHost(&trend.polynomials, trend.length * sizeof(polynomial));
+	for (int poly = 0; poly < trend.length; ++poly) {
+		polynomial p = fitPolynomail(&data[poly], polynomialDegree);
+		trend.polynomials[poly] = p;
+		exponential e;
+		e.base = 2.81;
+		e.exponentDisplacement = -poly;
+		e.exponentConstant = -1.0/polynomialRange;
+		e.baseConstant = 1.0 / polynomialRange;
+		trend.decays[poly] = e;
+	}
 	return trend;
 }
 
+
+
 double trendAtTime(trendFunction trend, double time) {
-	double value;
+	double value = 0;
+	for () {}
 	return value;
 }
 
