@@ -1,12 +1,7 @@
-
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "device_launch_parameters.h"
-
-#include <thrust/functional.h>
-#include <thrust/device_vector.h>
 #include <stdio.h>
-
 
 #define PICU 0.0125
 
@@ -29,7 +24,6 @@
 #define deaths input[7]
 
 
-
 __global__ void rungeKutta4(double* inputs, double* constants, int steps, double stepSize, double** simulation) {
     //inputs for each layer = &yValues[0]
     //y0+h*k1/2 = &yValues[8]
@@ -43,14 +37,14 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
     simulation[0][threadIdx.x] = inputs[threadIdx.x];
     double k[4];
 
-    
+
     /*
     //this lambda function would be nice to use because it cleans things up, but it doesnt want to work for some reason.
     //once I figure out that reason I might figure out a way to make it work with the lambda function and see if I can put it back in
-    
+
     auto PartialDifferentialEquation = [] __device__(double* input, double* constant, int DifferentialEquation) {
         double IFR = 0.01;
-        if (constant[6] * input[4] * 0.0125 > constant[7]) { 
+        if (constant[6] * input[4] * 0.0125 > constant[7]) {
             IFR = 0.02 - 0.01 * constant[7] / (constant[6] * input[4] * 0.0125);
         }
         switch (DifferentialEquation) {
@@ -81,7 +75,7 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
         }
         return 0.0;
     };*/
-                            
+
     //this is an intellisense bug, the compiler handles it just fine.
     __syncthreads();
 
@@ -110,7 +104,7 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
             }
             if (threadIdx.x == 3) {
                 //  dInfectedUntested/dt
-                k[kValue] = stepSize* (delta * presymptomatic - (gamma + testingRate) * infectiousUntested);
+                k[kValue] = stepSize * (delta * presymptomatic - (gamma + testingRate) * infectiousUntested);
             }
             if (threadIdx.x == 4) {
                 //  dInfectedTested/dt
@@ -124,11 +118,11 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
                 //  dRecoveredTested/dt
                 k[kValue] = stepSize * (gamma * infectiousTested * (1 - IFR));
             }
-            
+
 
             if (kValue < 2) { k[kValue] /= 2; }
             input = yValues;
-            yValues[8*(1+kValue) + threadIdx.x] = input[threadIdx.x] + k[kValue];
+            yValues[8 * (1 + kValue) + threadIdx.x] = input[threadIdx.x] + k[kValue];
             __syncthreads();
         }
 
@@ -142,16 +136,9 @@ __global__ void rungeKutta4(double* inputs, double* constants, int steps, double
     }
 }
 
-void printSimulationLayer(double* layer) {
-    printf("susceptible, exposed, presymptomatic, infectiousUntested, infectiousTested, recoveredUntested, recoveredTested, Deaths\n");
-    //printf("beta, epsilon, alpha, delta, gamma, testingRate, population, ICUbeds\n");
-    for (int i = 0; i < 7; ++i) {
-        printf("%f, ", layer[i] * 5000000);
-    }
-    printf("%f\n\n", layer[7] * 5000000);
-}
 
-void initializeConstants(double *constant, double *input) {
+
+void initializeConstants(double* constant, double* input) {
     alpha = 0.25;
     delta = 1;
     gamma = 0.1;
@@ -161,9 +148,9 @@ void initializeConstants(double *constant, double *input) {
     testingRate = 0.1;
 
     population = 5000000;
-    exposed = 10/population;
+    exposed = 10 / population;
     presymptomatic = 0;
-    ICUbeds = 500/population;
+    ICUbeds = 500 / population;
     infectiousUntested = 0;
     infectiousTested = 0;
     recoveredUntested = 0;
@@ -187,11 +174,21 @@ double** simulate(double* inputs, double* constants, int steps, double stepSize)
         h_simulation[i] = h_temp;
         d_simulation[i] = d_temp;
     }
-    
-    rungeKutta4<<<1, 8>>>(inputs, constants, steps, stepSize, d_simulation);
+
+    rungeKutta4 << <1, 8 >> > (inputs, constants, steps, stepSize, d_simulation);
 
     for (int i = 0; i < steps; ++i) { cudaMemcpy(h_simulation[i], d_simulation[i], 8 * sizeof(double), cudaMemcpyDeviceToHost); }
     return h_simulation;
+}
+
+
+void printSimulationLayer(double* layer) {
+    printf("susceptible, exposed, presymptomatic, infectiousUntested, infectiousTested, recoveredUntested, recoveredTested, Deaths\n");
+    //printf("beta, epsilon, alpha, delta, gamma, testingRate, population, ICUbeds\n");
+    for (int i = 0; i < 7; ++i) {
+        printf("%f, ", layer[i] * 5000000);
+    }
+    printf("%f\n\n", layer[7] * 5000000);
 }
 
 int main() {
@@ -214,7 +211,7 @@ int main() {
     cudaMemcpy(d_constant, h_constant, 8 * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_input, h_input, 8 * sizeof(double), cudaMemcpyHostToDevice);
 
-    int simulationSteps = 5 * 2 * 365;
+    int simulationSteps = 2 * 365;
     double simulationStepSize = 0.5;
 
     double** h_simulation = simulate(d_input, d_constant, simulationSteps, simulationStepSize);
