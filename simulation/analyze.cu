@@ -102,7 +102,9 @@ trendFunction calculateTrend(double* data, int polynomialDegree, int polynomialR
 
 double trendAtTime(trendFunction trend, double time) {
 	double value = 0;
-	for () {}
+	for (int i = 0; i < trend.length; ++i) {
+		value += polynomialAtTime(trend.polynomials[i], i) * exponentialAtTime(trend.decays[i], i);
+	}
 	return value;
 }
 
