@@ -82,10 +82,12 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CudaCompile Include="..\..\cuNet\cuNet\linear_algebra.cu" />
     <CudaCompile Include="analyze.cu" />
     <CudaCompile Include="SIER_main.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\cuNet\cuNet\linear_algebra.h" />
     <ClInclude Include="simulate.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

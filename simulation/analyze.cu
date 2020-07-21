@@ -52,6 +52,7 @@ __global__ void error(double* expected, double* actual, double* error, int lengt
 
 polynomial fitPolynomail(double* data, int degree) {
 	polynomial p;
+
 	return p;
 }
 
@@ -77,7 +78,7 @@ double polynomialAtTime(polynomial p, double time) {
 double exponentialAtTime(exponential e, double time) {
 	double value = 0;
 
-	return e.baseConstant * pow(e.base, e.exponentConstant * (time - e.exponentDisplacement));
+	return e.baseConstant * pow(e.base, e.exponentConstant * (time - e.exponentDisplacement) * (time - e.exponentDisplacement));
 }
 
 trendFunction calculateTrend(double* data, int polynomialDegree, int polynomialRange, int dataLength) {
@@ -92,13 +93,11 @@ trendFunction calculateTrend(double* data, int polynomialDegree, int polynomialR
 		e.base = 2.81;
 		e.exponentDisplacement = -poly;
 		e.exponentConstant = -1.0/polynomialRange;
-		e.baseConstant = 1.0 / polynomialRange;
+		e.baseConstant = 1.2 / polynomialRange;
 		trend.decays[poly] = e;
 	}
 	return trend;
 }
-
-
 
 double trendAtTime(trendFunction trend, double time) {
 	double value = 0;
