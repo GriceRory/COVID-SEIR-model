@@ -1,6 +1,6 @@
 
 #define BLOCK_SIZE 32*2
-
+#include "linear_algebra.cu"
 
 typedef struct{
 	int degree;
@@ -52,6 +52,7 @@ __global__ void error(double* expected, double* actual, double* error, int lengt
 
 polynomial fitPolynomail(double* data, int degree) {
 	polynomial p;
+	matrix d_m;
 
 	return p;
 }
