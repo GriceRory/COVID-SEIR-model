@@ -1,6 +1,8 @@
+#include <cuda_runtime.h>
+#include "linear_algebra.cu"
+
 
 #define BLOCK_SIZE 32*2
-#include "linear_algebra.cu"
 
 typedef struct{
 	int degree;
@@ -22,7 +24,7 @@ typedef struct {
 
 __device__ void reduce(double *reduction);
 double error(double* expected, double* actual);
-polynomial fitPolynomail(double* data, int degree);
+polynomial fitPolynomail(double* data, double* inputs, int degree);
 polynomial differentiate(polynomial p);
 trendFunction calculateTrend(double* data, int polynomialDegree, int polynomialRange, int dataLength);
 double trendAtTime(trendFunction trend, double time);
@@ -50,10 +52,41 @@ __global__ void error(double* expected, double* actual, double* error, int lengt
 	erorr[0] = errors[0];
 }*/
 
-polynomial fitPolynomail(double* data, int degree) {
+polynomial fitPolynomail(double* data, double* inputs, int degree, int dataLength) {
 	polynomial p;
-	matrix d_m;
+	matrix *h_X, *h_Xt, *h_inverse, *h_temp;
+	matrix *d_X, *d_Xt, *d_inverse, *d_temp;
+	vector *h_inputs, *d_inputs, *h_data, *d_data;
 
+	h_X = cuda_build_matrix(dataLength, degree);
+	h_Xt = cuda_build_matrix(degree, dataLength);
+	h_inverse = cuda_build_matrix(degree, degree);
+	h_temp = cuda_build_matrix(degree, degree);
+	h_inputs = build_vector(degree);
+	h_data = build_vector(degree);
+
+	d_X = cuda_build_matrix(dataLength, degree);
+	d_Xt = cuda_build_matrix(degree, dataLength);
+	d_inverse = cuda_build_matrix(degree, degree);
+	d_temp = cuda_build_matrix(degree, degree);
+	d_inputs = cuda_build_vector(degree);
+	d_data = cuda_build_vector(degree);
+		
+	copy_host_to_device(h_X, d_X);
+	copy_host_to_device(h_Xt, d_Xt);
+	copy_host_to_device(h_inverse, d_inverse);
+	copy_host_to_device(h_temp, d_temp);
+
+
+	matrix_multiply(d_Xt, d_X, d_temp);
+	invert<<<1, d_temp->height>>>(d_temp, d_inverse);
+	//constants = (X^T X)^-1 * X^T * Y
+
+	cuda_free_matrix(d_X);
+	cuda_free_matrix(d_Xt);
+	cuda_free_matrix(d_inverse);
+	
+	
 	return p;
 }
 
